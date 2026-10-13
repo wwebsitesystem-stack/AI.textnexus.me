@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .chat-container::-webkit-scrollbar { width: 6px; }
+        .chat-container::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 h-screen flex flex-col justify-between">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-gray-900/50 backdrop-blur px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
+            <h1 class="font-bold text-lg tracking-wide text-white">Nexus AI</h1>
+        </div>
+        <span class="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full border border-gray-700">Powered by Workers AI</span>
+    </header>
+
+    <!-- Chat Messages Container -->
+    <main id="chatContainer" class="chat-container flex-1 overflow-y-auto px-4 py-6 space-y-6 max-w-3xl w-full mx-auto">
+        <div class="flex items-start space-x-4">
+            <div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shrink-0">AI</div>
+            <div class="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 max-w-xl text-gray-200 leading-relaxed shadow-sm">
+                Hello! I'm your Nexus AI assistant. How can I help you build, code, or answer questions today?
+            </div>
+        </div>
+    </main>
+
+    <!-- Input Form -->
+    <footer class="bg-gray-900 border-t border-gray-800 p-4">
+        <form id="chatForm" class="max-w-3xl mx-auto flex gap-3">
+            <input 
+                type="text" 
+                id="userInput" 
+                placeholder="Ask anything or request code..." 
+                class="flex-1 bg-gray-950 border border-gray-800 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition-colors text-sm"
+                autocomplete="off"
+                required
+            >
+            <button 
+                type="submit" 
+                id="sendBtn"
+                class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-xl transition-colors flex items-center justify-center text-sm shadow-lg shadow-emerald-950/50"
+            >
+                Send
+            </button>
+        </form>
+    </footer>
+
+    <!-- Client Script -->
+    <script>
+        const chatContainer = document.getElementById('chatContainer');
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Custom domain worker URL bypassing web filters
+        const WORKER_URL = "https://worker.textnexus.me"; 
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const promptText = userInput.value.trim();
+            if (!promptText) return;
+
+            appendMessage(promptText, 'user');
+            userInput.value = '';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            const typingId = showTypingIndicator();
+
+            try {
+                const response = await fetch(WORKER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                const data = await response.json();
+                removeTypingIndicator(typingId);
+
+                if (response.ok && data.reply) {
+                    appendMessage(data.reply, 'ai');
+                } else {
+                    appendMessage(data.error || 'Something went wrong. Please try again.', 'ai', true);
+                }
+            } catch (err) {
+                removeTypingIndicator(typingId);
+                appendMessage('Network error: Unable to reach the AI worker.', 'ai', true);
+            } finally {
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        });
+
+        function appendMessage(text, sender, isError = false) {
+            const isUser = sender === 'user';
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex items-start space-x-4 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `w-8 h-8 rounded-lg flex items-center justify-center font-bold text-white shrink-0 ${isUser ? 'bg-indigo-600' : 'bg-emerald-600'}`;
+            avatar.textContent = isUser ? 'U' : 'AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = `rounded-2xl px-5 py-4 max-w-xl text-sm leading-relaxed shadow-sm ${
+                isUser 
+                    ? 'bg-indigo-600 text-white' 
+                    : isError 
+                        ? 'bg-red-950/50 border border-red-800 text-red-200' 
+                        : 'bg-gray-900 border border-gray-800 text-gray-200'
+            }`;
+            bubble.style.whiteSpace = 'pre-wrap';
+            bubble.textContent = text;
+
+            wrapper.appendChild(avatar);
+            wrapper.appendChild(bubble);
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+        }
+
+        function showTypingIndicator() {
+            const id = 'typing-' + Date.now();
+            const wrapper = document.createElement('div');
+            wrapper.id = id;
+            wrapper.className = `flex items-start space-x-4`;
+
+            const avatar = document.createElement('div');
+            avatar.className = `w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center font-bold text-white shrink-0`;
+            avatar.textContent = 'AI';
+
+            const bubble = document.createElement('div');
+            bubble.className = `bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 text-gray-400 text-sm flex items-center space-x-2`;
+            bubble.innerHTML = `
+                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            `;
+
+            wrapper.appendChild(avatar);
+            wrapper.appendChild(bubble);
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
+            return id;
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    </script>
+</body>
+</html>
